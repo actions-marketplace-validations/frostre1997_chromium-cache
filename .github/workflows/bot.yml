@@ -54,15 +54,20 @@ jobs:
         run: |
           # Combine Chromium blog link + GitHub summary + custom text
           cat <<EOF > release_body.md
-          update
+          **Note:**
+          This release pulls the actual Chromium source version.
 
-          ### Chromium Changelog
+          ### Chromium Changelog:
           See the official [Chrome Releases Blog](https://chromereleases.googleblog.com/search?q=${VERSION}) for the full Chromium changelog for version ${VERSION}.
 
-          ### GitHub Summary
+          ### Action Fixes (GitHub Summary):
           $(cat gh_summary.md)
 
-          And more
+          ### More:
+          - **Action Repository:** [frostre1997/chromium-cache](https://github.com/${{ github.repository }})
+          - **Chromium Source:** [chromium.googlesource.com/chromium/src](https://chromium.googlesource.com/chromium/src/)
+          - **Older Changelogs:** You can find the older changelogs [here](https://github.com/${{ github.repository }}/releases).
+
           EOF
 
       - name: Create Draft Release
