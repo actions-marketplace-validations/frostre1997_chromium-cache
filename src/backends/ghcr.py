@@ -1,4 +1,4 @@
-"""GHCR backend — archive-only via oras. Splits into 2 GiB parts, pushes/pulls as OCI artifact."""
+"""GHCR backend — archive-only via oras. Splits into parts, pushes/pulls as OCI artifact."""
 import json
 import os
 import subprocess
@@ -9,7 +9,7 @@ from lib.log import log, die
 from backends.base import Backend, BackendContext
 
 GB = 1024 ** 3
-CHUNK_SIZE = 2 * 1024 ** 3
+DEFAULT_CHUNK_SIZE_MB = 2048
 ARTIFACT_TYPE = "application/vnd.frostre.chromium.source.v1"
 LAYER_MEDIA_TYPE = "application/zstd"
 DEFAULT_REGISTRY = "ghcr.io"
@@ -21,17 +21,29 @@ def _registry(config: dict) -> str:
 
 
 def _repo(config: dict) -> str:
+    """Get the repository name, ensuring it is lowercase (OCI requirement)."""
     r = (config.get("repository") or "").strip()
-    if r:
-        return r
-    env = os.environ.get("GITHUB_REPOSITORY", "").strip()
-    if not env:
-        die("ghcr backend: backend-config.repository missing and GITHUB_REPOSITORY unset")
-    return f"{env}-chromium-cache"
+    if not r:
+        env = os.environ.get("GITHUB_REPOSITORY", "").strip()
+        if not env:
+            die("ghcr backend: backend-config.repository missing and GITHUB_REPOSITORY unset")
+        r = f"{env}-chromium-cache"
+    
+    # GHCR/OCI strictly requires lowercase repository names
+    return r.lower()
 
 
 def _ref(config: dict, version: str) -> str:
     return f"{_registry(config)}/{_repo(config)}:{version}"
+
+
+def _chunk_size_bytes(config: dict) -> int:
+    """Get chunk size in bytes from config (in MB), defaulting to 2048MB (2GB)."""
+    try:
+        mb = int(config.get("chunk_size_mb", DEFAULT_CHUNK_SIZE_MB))
+        return mb * 1024 * 1024
+    except ValueError:
+        die(f"ghcr backend: chunk_size_mb must be an integer (got {config.get('chunk_size_mb')})")
 
 
 def _token() -> str:
@@ -47,6 +59,7 @@ def _oras_login(config: dict) -> None:
     subprocess.run(
         ["oras", "login", _registry(config), "-u", actor, "--password-stdin"],
         input=_token(), text=True, check=True,
+        stdout=subprocess.DEVNULL,
     )
 
 
@@ -86,6 +99,7 @@ def _oras_pull(config: dict, version: str, dest: Path) -> None:
     subprocess.run(
         ["oras", "pull", ref, "-o", str(dest)],
         check=True, text=True,
+        stdout=subprocess.DEVNULL,
     )
 
 
@@ -116,8 +130,11 @@ class GhcrBackend(Backend):
             archive = tmp / "chromium.tar.zst"
             log("ghcr: compressing with zstd -19 -T0")
             self._compress(ctx.workdir, archive)
-            log(f"ghcr: splitting into {CHUNK_SIZE}-byte parts")
-            self._split(archive, tmp)
+            
+            chunk_bytes = _chunk_size_bytes(ctx.config)
+            log(f"ghcr: splitting into {chunk_bytes}-byte parts")
+            self._split(archive, tmp, chunk_bytes)
+            
             parts = sorted(tmp.glob(PARTS_GLOB))
             _oras_push(ctx.config, ctx.version, parts, tmp)
         finally:
@@ -155,9 +172,9 @@ class GhcrBackend(Backend):
             die(f"ghcr: compress failed (tar={tar.returncode} zstd={zstd.returncode})")
 
     @staticmethod
-    def _split(archive: Path, tmp: Path) -> None:
+    def _split(archive: Path, tmp: Path, chunk_bytes: int) -> None:
         subprocess.run(
-            ["split", "-b", str(CHUNK_SIZE), "-d", "-a", "3",
+            ["split", "-b", str(chunk_bytes), "-d", "-a", "3",
              str(archive), str(tmp / "chromium.tar.zst.part-")],
             check=True, text=True,
         )
