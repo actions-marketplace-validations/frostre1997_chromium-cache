@@ -32,6 +32,6 @@ def measure(path: str) -> DiskInfo:
     return DiskInfo(
         path=path,
         measured=measured,
-        free_gb=round(free / GB, 2),
-        total_gb=round(total / GB, 2),
-  )
+        free_gb=free / GB,
+        total_gb=total / GB,
+    )
