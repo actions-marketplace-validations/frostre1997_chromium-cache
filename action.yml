@@ -71,7 +71,7 @@ runs:
         echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
     - name: Install rclone (if needed)
-      if: inputs.backend == 'rclone'
+      if: inputs.backend == 'rclone' || inputs.backend == 'r2'
       shell: bash
       run: |
         if command -v rclone >/dev/null; then
