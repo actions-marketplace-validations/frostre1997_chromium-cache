@@ -1,0 +1,58 @@
+name: chromium-test-cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Chromium version (empty = latest stable)'
+        required: false
+        default: ''
+      backend:
+        description: 'local | rclone | ghcr'
+        required: false
+        default: 'local'
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - name: Fetch Chromium (no build)
+        id: cc
+        uses: ./
+        with:
+          mode: restore
+          version: ${{ inputs.version }}
+          backend: ${{ inputs.backend }}
+          backend-config: >-
+            ${{ inputs.backend == 'local'
+                && format('{{"root":"{0}/cache"}}', runner.temp)
+                || '{}' }}
+          min-free-gb: 30
+          path: ${{ runner.temp }}/chromium
+
+      - name: Verify real source tree
+        run: |
+          test -f "${{ steps.cc.outputs.path }}/BUILD.gn"
+          test -f "${{ steps.cc.outputs.path }}/.git/HEAD"
+          test -f "${{ runner.temp }}/chromium/.gclient"
+          echo "version: ${{ steps.cc.outputs.version }}"
+          echo "size:"
+          du -sh "${{ runner.temp }}/chromium"
+          echo "top-level:"
+          ls "${{ steps.cc.outputs.path }}" | head -20
