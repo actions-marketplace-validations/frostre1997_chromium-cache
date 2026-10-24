@@ -1,6 +1,8 @@
 """Render Markdown to $GITHUB_STEP_SUMMARY."""
 import os
 
+from lib.disk import DiskInfo
+
 
 def _path() -> str | None:
     return os.environ.get("GITHUB_STEP_SUMMARY")
@@ -15,8 +17,9 @@ def write(lines: list[str]) -> None:
 
 
 def render_plan(*, mode: str, version: str, backend: str,
-                path: str, probe: bool) -> list[str]:
-    return [
+                path: str, probe: bool,
+                disk: DiskInfo | None = None) -> list[str]:
+    lines = [
         "## chromium-cache",
         "",
         f"- Mode: `{mode}`",
@@ -25,3 +28,10 @@ def render_plan(*, mode: str, version: str, backend: str,
         f"- Path: `{path}`",
         f"- Probe-only: `{probe}`",
     ]
+    if disk is not None:
+        measured = disk.measured if disk.measured != disk.path else "same"
+        lines.append(
+            f"- Disk: `{disk.free_gb} / {disk.total_gb} GB` "
+            f"free at `{disk.measured}` (measured for `{measured}`)"
+        )
+    return lines
