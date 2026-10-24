@@ -30,6 +30,7 @@ def _make_fake_tree(work: Path):
     work.mkdir(parents=True, exist_ok=True)
     (work / ".gclient").write_text("solutions = []\n")
     (work / "src" / ".git").mkdir(parents=True)
+    (work / "src" / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
     (work / "src" / "README").write_text("hello")
     (work / "src" / "build").mkdir()
     (work / "src" / "build" / "main.cc").write_text("int main(){}")
@@ -48,12 +49,13 @@ def test_save_then_restore_roundtrip(tmp_path):
 
     backend.save(ctx)
     assert backend.probe(ctx) > 0
-    assert (tmp_path / "cache" / ctx.version / "src" / ".git").exists()
+    assert (tmp_path / "cache" / ctx.version / "src" / ".git" / "HEAD").exists()
 
     shutil.rmtree(ctx.workdir)
     assert backend.restore(ctx) is True
     assert (ctx.workdir / "src" / "README").read_text() == "hello"
     assert (ctx.workdir / "src" / "build" / "main.cc").exists()
+    assert (ctx.workdir / "src" / ".git" / "HEAD").read_text() == "ref: refs/heads/main\n"
 
 
 def test_save_applies_excludes(tmp_path):
