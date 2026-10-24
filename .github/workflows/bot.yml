@@ -1,0 +1,74 @@
+name: Create Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 131.0.6778.85). Leave empty to fetch current stable.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to generate changelogs and fetch tags
+
+      - name: Resolve Version
+        id: resolve
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            echo "Fetching latest stable version from Chromium Dash..."
+            VERSION=$(curl -s "https://chromiumdash.appspot.com/fetch_releases?channel=Stable&platform=Linux&num=1" | jq -r '.[0].version')
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Resolved version: $VERSION"
+
+      - name: Configure Git Bot
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Push Tag
+        run: |
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Generate GitHub Summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch GitHub's auto-generated release notes
+          gh api repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="v${VERSION}" \
+            -q .body > gh_summary.md
+
+      - name: Prepare Release Body
+        run: |
+          # Combine Chromium blog link + GitHub summary + custom text
+          cat <<EOF > release_body.md
+          update
+
+          ### Chromium Changelog
+          See the official [Chrome Releases Blog](https://chromereleases.googleblog.com/search?q=${VERSION}) for the full Chromium changelog for version ${VERSION}.
+
+          ### GitHub Summary
+          $(cat gh_summary.md)
+
+          And more
+          EOF
+
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.VERSION }}"
+          name: "v${{ env.VERSION }}"
+          draft: true
+          body_path: release_body.md
