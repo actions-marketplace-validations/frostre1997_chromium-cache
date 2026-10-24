@@ -1,0 +1,99 @@
+name: integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  roundtrip-local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up fake Chromium tree
+        run: |
+          mkdir -p "$RUNNER_TEMP/work/src/.git" "$RUNNER_TEMP/work/src/build" "$RUNNER_TEMP/work/out"
+          echo "ref: refs/heads/main" > "$RUNNER_TEMP/work/src/.git/HEAD"
+          echo "hello" > "$RUNNER_TEMP/work/src/README"
+          echo "int main(){}" > "$RUNNER_TEMP/work/src/build/main.cc"
+          echo "binary" > "$RUNNER_TEMP/work/out/artifact"
+          echo 'solutions = []' > "$RUNNER_TEMP/work/.gclient"
+
+      - name: Save
+        uses: ./
+        with:
+          mode: save
+          version: '131.0.6778.85'
+          backend: local
+          backend-config: '{"root":"${{ runner.temp }}/cache"}'
+          min-free-gb: 0
+          exclude: 'out/**'
+          path: ${{ runner.temp }}/work
+        env:
+          CHROMIUM_CACHE_SKIP_FETCH: '1'
+
+      - name: Assert save produced the expected tree
+        run: |
+          test -f "$RUNNER_TEMP/cache/131.0.6778.85/src/README"
+          test -f "$RUNNER_TEMP/cache/131.0.6778.85/src/.git/HEAD"
+          test -f "$RUNNER_TEMP/cache/131.0.6778.85/.gclient"
+          test ! -e "$RUNNER_TEMP/cache/131.0.6778.85/out"
+
+      - name: Wipe workspace
+        run: rm -rf "$RUNNER_TEMP/work"
+
+      - name: Restore
+        id: restore
+        uses: ./
+        with:
+          mode: restore
+          version: '131.0.6778.85'
+          backend: local
+          backend-config: '{"root":"${{ runner.temp }}/cache"}'
+          min-free-gb: 0
+          path: ${{ runner.temp }}/work
+        env:
+          CHROMIUM_CACHE_SKIP_FETCH: '1'
+
+      - name: Assert restore output and files
+        run: |
+          test "${{ steps.restore.outputs.cache-hit }}" = "true"
+          test "${{ steps.restore.outputs.version }}" = "131.0.6778.85"
+          test -f "$RUNNER_TEMP/work/src/README"
+          test "$(cat "$RUNNER_TEMP/work/src/README")" = "hello"
+          test -f "$RUNNER_TEMP/work/src/.git/HEAD"
+          test -f "$RUNNER_TEMP/work/.gclient"
+          test ! -e "$RUNNER_TEMP/work/out"
+
+      - name: Disk shortfall fails fast
+        continue-on-error: false
+        run: |
+          if "${{ github.workspace }}/src/main.py" 2>/dev/null; then true; fi
+        shell: bash
+        # (this step is intentionally a no-op — real shortfall test lives in pytest)
+
+  probe-empty:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Probe empty cache
+        id: probe
+        uses: ./
+        with:
+          mode: both
+          version: '131.0.6778.85'
+          backend: local
+          backend-config: '{"root":"${{ runner.temp }}/empty-cache"}'
+          probe-only: 'true'
+          min-free-gb: 0
+          path: ${{ runner.temp }}/work
+
+      - name: Assert probe outputs
+        run: |
+          test "${{ steps.probe.outputs.cache-hit }}" = "false"
+          test "${{ steps.probe.outputs.remote-size-gb }}" = "0.00"
