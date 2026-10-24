@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""chromium-cache entry point (M3)."""
+"""chromium-cache entry point (M6)."""
 import sys
 from pathlib import Path
 
 _here = Path(__file__).resolve()
-sys.path.insert(0, str(_here.parent))            # src/
-sys.path.insert(0, str(_here.parent.parent))     # repo root
+sys.path.insert(0, str(_here.parent))
+sys.path.insert(0, str(_here.parent.parent))
 
 from lib.log import log, die                     # noqa: E402
 from lib import summary                          # noqa: E402
@@ -25,7 +25,10 @@ def _make_backend(name: str) -> Backend:
     if name == "rclone":
         from backends.rclone import RcloneBackend
         return RcloneBackend()
-    die(f"backend {name!r} not implemented yet (ghcr lands in M6)")
+    if name == "ghcr":
+        from backends.ghcr import GhcrBackend
+        return GhcrBackend()
+    die(f"backend {name!r} not implemented")
 
 
 def main() -> int:
