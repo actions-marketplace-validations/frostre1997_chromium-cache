@@ -54,7 +54,12 @@ def _r2_config(config: dict) -> dict:
     bucket = (config.get("bucket") or "").strip().strip("/")
     if not bucket:
         die("r2 backend: backend-config.bucket is required")
-    prefix = (config.get("prefix") or "chromium").strip().strip("/")
+
+    if "prefix" in config:
+        prefix = (config["prefix"] or "").strip().strip("/")
+    else:
+        prefix = "chromium"
+
     path = f"{bucket}/{prefix}" if prefix else bucket
 
     user_extra = config.get("extra_args") or []
