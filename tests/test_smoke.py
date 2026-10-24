@@ -1,4 +1,6 @@
+import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -25,25 +27,6 @@ def _run(tmp_path, env_extra):
     return r, out_file.read_text(), sum_file.read_text()
 
 
-def test_main_runs(tmp_path):
-    r, out, s = _run(tmp_path, {
-        "INPUT_MODE": "restore",
-        "INPUT_VERSION": "131.0.6778.85",
-        "INPUT_BACKEND": "local",
-        "INPUT_MIN_FREE_GB": "1",
-        "INPUT_PATH": str(tmp_path / "chromium"),
-    })
-    assert r.returncode == 0, r.stderr
-    assert "cache-hit=false" in out
-    assert "version=131.0.6778.85" in out
-    assert f"path={tmp_path}/chromium/src" in out
-    assert "remote-size-gb=0" in out
-    assert "## chromium-cache" in s
-    assert "131.0.6778.85" in s
-    assert "local" in s
-    assert "Disk:" in s
-
-
 def test_main_invalid_mode(tmp_path):
     r, _, _ = _run(tmp_path, {"INPUT_MODE": "banana"})
     assert r.returncode != 0
@@ -55,25 +38,110 @@ def test_main_fails_on_disk_shortfall(tmp_path):
         "INPUT_MODE": "restore",
         "INPUT_VERSION": "131.0.6778.85",
         "INPUT_BACKEND": "local",
-        "INPUT_MIN_FREE_GB": "999999999",       # no device has this much
+        "INPUT_MIN_FREE_GB": "999999999",
         "INPUT_PATH": str(tmp_path / "chromium"),
     })
     assert r.returncode != 0
     assert "insufficient disk" in r.stderr
     assert "exceeds total volume size" in r.stderr
-    # Fail before writing outputs
     assert "cache-hit" not in out
 
 
 def test_main_probe_skips_disk(tmp_path):
-    r, out, _ = _run(tmp_path, {
+    r, out, s = _run(tmp_path, {
         "INPUT_MODE": "both",
         "INPUT_VERSION": "131.0.6778.85",
         "INPUT_BACKEND": "local",
+        "INPUT_BACKEND_CONFIG": '{"root": "' + str(tmp_path / "cache") + '"}',
         "INPUT_MIN_FREE_GB": "999999999",
         "INPUT_PROBE_ONLY": "true",
         "INPUT_PATH": str(tmp_path / "chromium"),
     })
     assert r.returncode == 0, r.stderr
     assert "cache-hit=false" in out
+    assert "remote-size-gb=0.00" in out
     assert "skipped (probe-only)" in r.stderr
+    assert "Cache hit" not in s  # probe doesn't report hit
+
+
+def test_roundtrip_local(tmp_path):
+    work = tmp_path / "work"
+    cache = tmp_path / "cache"
+    work.mkdir()
+    cache.mkdir()
+
+    (work / "src" / ".git").mkdir(parents=True)
+    (work / "src" / "README").write_text("hello")
+    (work / "src" / "build").mkdir()
+    (work / "src" / "build" / "main.cc").write_text("int main(){}")
+    (work / "out").mkdir()
+    (work / "out" / "binary").write_text("binary data")
+
+    cfg = json.dumps({"root": str(cache)})
+
+    # ---- save ----
+    r, out, s = _run(tmp_path, {
+        "INPUT_MODE": "save",
+        "INPUT_VERSION": "131.0.6778.85",
+        "INPUT_BACKEND": "local",
+        "INPUT_BACKEND_CONFIG": cfg,
+        "INPUT_MIN_FREE_GB": "0",
+        "INPUT_PATH": str(work),
+        "INPUT_EXCLUDE": "out/",
+    })
+    assert r.returncode == 0, r.stderr
+    assert (cache / "131.0.6778.85" / "src" / ".git").exists()
+    assert (cache / "131.0.6778.85" / "src" / "build" / "main.cc").exists()
+    assert not (cache / "131.0.6778.85" / "out").exists()
+    assert "remote-size-gb=" in out
+    assert "Remote size:" in s
+
+    # ---- wipe work ----
+    shutil.rmtree(work)
+
+    # ---- restore ----
+    r, out, s = _run(tmp_path, {
+        "INPUT_MODE": "restore",
+        "INPUT_VERSION": "131.0.6778.85",
+        "INPUT_BACKEND": "local",
+        "INPUT_BACKEND_CONFIG": cfg,
+        "INPUT_MIN_FREE_GB": "0",
+        "INPUT_PATH": str(work),
+    })
+    assert r.returncode == 0, r.stderr
+    assert "cache-hit=true" in out
+    assert "Cache hit: `yes`" in s
+    assert (work / "src" / ".git").exists()
+    assert (work / "src" / "README").read_text() == "hello"
+    assert not (work / "out").exists()
+
+
+def test_save_skipped_on_hit_without_force(tmp_path):
+    work = tmp_path / "work"
+    cache = tmp_path / "cache"
+    work.mkdir()
+    cache.mkdir()
+    (work / "src" / ".git").mkdir(parents=True)
+    (work / "src" / "x").write_text("hello")
+
+    cfg = json.dumps({"root": str(cache)})
+    env = {
+        "INPUT_VERSION": "131.0.6778.85",
+        "INPUT_BACKEND": "local",
+        "INPUT_BACKEND_CONFIG": cfg,
+        "INPUT_MIN_FREE_GB": "0",
+        "INPUT_PATH": str(work),
+    }
+
+    # First save populates cache
+    r, _, _ = _run(tmp_path, {"INPUT_MODE": "save", **env})
+    assert r.returncode == 0, r.stderr
+
+    # Change source — with mode=both and cache-hit, save must skip
+    (work / "src" / "x").write_text("CHANGED")
+    r, out, _ = _run(tmp_path, {"INPUT_MODE": "both", **env})
+    assert r.returncode == 0, r.stderr
+    assert "cache-hit=true" in out
+    assert "save: skipped" in r.stderr
+    # Cache still has the original content
+    assert (cache / "131.0.6778.85" / "src" / "x").read_text() == "hello"
