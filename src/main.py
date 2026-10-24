@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""chromium-cache entry point (M4)."""
+"""chromium-cache entry point (M3)."""
 import sys
 from pathlib import Path
 
@@ -12,6 +12,9 @@ from lib import summary                          # noqa: E402
 import inputs                                    # noqa: E402
 import outputs                                   # noqa: E402
 import disk_guard                                # noqa: E402
+import version as version_mod                    # noqa: E402
+import fetch                                     # noqa: E402
+import gclient                                   # noqa: E402
 from backends.base import Backend, BackendContext  # noqa: E402
 
 
@@ -19,16 +22,18 @@ def _make_backend(name: str) -> Backend:
     if name == "local":
         from backends.local import LocalBackend
         return LocalBackend()
-    die(f"backend {name!r} not implemented yet (only 'local' lands in M4)")
+    if name == "rclone":
+        from backends.rclone import RcloneBackend
+        return RcloneBackend()
+    die(f"backend {name!r} not implemented yet (ghcr lands in M6)")
 
 
 def main() -> int:
     inp = inputs.parse()
     disk = disk_guard.check(inp.min_free_gb, inp.path, inp.probe_only)
 
-    if not inp.version:
-        die("version is required (auto-resolve from Chromium Dash lands in M3)")
-    version = inp.version
+    version = version_mod.resolve(inp.version)
+    log(f"version: resolved {version}")
 
     ctx = BackendContext(
         version=version,
@@ -49,6 +54,9 @@ def main() -> int:
     elif inp.mode in ("restore", "both"):
         cache_hit = backend.restore(ctx)
         log(f"restore: {'hit' if cache_hit else 'miss'} (version={version})")
+        fetch.ensure_at_version(ctx.workdir, version, inp.shallow)
+        gclient.sync(ctx.workdir, inp.shallow)
+        log("fetch+gclient: complete")
 
     if inp.mode in ("save", "both") and not inp.probe_only:
         if cache_hit and not inp.force_save:
