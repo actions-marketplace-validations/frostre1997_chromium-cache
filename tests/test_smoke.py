@@ -65,7 +65,7 @@ def test_main_probe_skips_disk(tmp_path):
 
 def test_main_version_invalid(tmp_path):
     r, _, _ = _run(tmp_path, {
-        "INPUT_MODE": "probe",
+        "INPUT_MODE": "restore",
         "INPUT_VERSION": "not-a-version",
         "INPUT_BACKEND": "local",
         "INPUT_PROBE_ONLY": "true",
