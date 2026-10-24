@@ -1,5 +1,5 @@
 name: 'chromium-cache'
-description: 'Cache the full Chromium source code across GitHub Actions runs via external storage.'
+description: 'Cache the full full Chromium source code across GitHub Actions runs via external storage.'
 author: 'frostre1997'
 branding:
   icon: 'archive'
@@ -25,7 +25,7 @@ inputs:
     description: 'Re-push even if version already exists'
     default: 'false'
   min-free-gb:
-    description: 'Pre-flight disk assertion (GB)'
+    description: 'Pre-flight free-space assertion (GB)'
     default: '30'
   exclude:
     description: 'Comma-separated glob patterns to strip before save'
@@ -48,12 +48,44 @@ outputs:
     description: 'Resolved Chromium version'
     value: ${{ steps.run.outputs.version }}
   remote-size-gb:
-    description: 'Size on backend for this version (0 in M1)'
+    description: 'Size on backend for this version (GB)'
     value: ${{ steps.run.outputs.remote-size-gb }}
 
 runs:
   using: composite
   steps:
+    - name: Install oras (if needed)
+      if: inputs.backend == 'ghcr'
+      shell: bash
+      run: |
+        if command -v oras >/dev/null; then
+          echo "oras already installed: $(oras version | head -1)"
+          exit 0
+        fi
+        set -e
+        ORAS_VER=1.2.0
+        mkdir -p "$RUNNER_TEMP/bin"
+        curl -sSfL "https://github.com/oras-project/oras/releases/download/v${ORAS_VER}/oras_${ORAS_VER}_linux_amd64.tar.gz" \
+          | tar -xz -C "$RUNNER_TEMP/bin" oras
+        chmod +x "$RUNNER_TEMP/bin/oras"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    - name: Install rclone (if needed)
+      if: inputs.backend == 'rclone'
+      shell: bash
+      run: |
+        if command -v rclone >/dev/null; then
+          echo "rclone already installed: $(rclone version | head -1)"
+          exit 0
+        fi
+        set -e
+        mkdir -p "$RUNNER_TEMP/bin"
+        curl -sSfL "https://downloads.rclone.org/rclone-current-linux-amd64.zip" \
+          -o "$RUNNER_TEMP/rclone.zip"
+        unzip -q "$RUNNER_TEMP/rclone.zip" -d "$RUNNER_TEMP/rclone-install"
+        install -m 0755 "$RUNNER_TEMP"/rclone-install/rclone-*/rclone "$RUNNER_TEMP/bin/rclone"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
     - id: run
       shell: bash
       run: python3 "${{ github.action_path }}/src/main.py"
@@ -69,3 +101,6 @@ runs:
         INPUT_SHALLOW: ${{ inputs.shallow }}
         INPUT_PROBE_ONLY: ${{ inputs.probe-only }}
         GITHUB_WORKSPACE: ${{ github.workspace }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GH_TOKEN: ${{ github.token }}
