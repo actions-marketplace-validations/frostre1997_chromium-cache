@@ -1,0 +1,71 @@
+name: 'chromium-cache'
+description: 'Cache the full Chromium source code across GitHub Actions runs via external storage.'
+author: 'frostre1997'
+branding:
+  icon: 'archive'
+  color: 'blue'
+
+inputs:
+  mode:
+    description: 'restore | save | both'
+    default: 'both'
+  version:
+    description: 'Chromium version (e.g. 131.0.6778.85). Empty = latest stable.'
+    default: ''
+  path:
+    description: 'Directory that will contain chromium/src (relative to GITHUB_WORKSPACE)'
+    default: ''
+  backend:
+    description: 'rclone | ghcr | local'
+    default: 'ghcr'
+  backend-config:
+    description: 'Backend-specific JSON config'
+    default: '{}'
+  force-save:
+    description: 'Re-push even if version already exists'
+    default: 'false'
+  min-free-gb:
+    description: 'Pre-flight disk assertion (GB)'
+    default: '30'
+  exclude:
+    description: 'Comma-separated glob patterns to strip before save'
+    default: ''
+  shallow:
+    description: 'Use --no-history on fetch'
+    default: 'true'
+  probe-only:
+    description: 'Report cache hit + size without downloading or saving'
+    default: 'false'
+
+outputs:
+  cache-hit:
+    description: '"true" if restored from cache'
+    value: ${{ steps.run.outputs.cache-hit }}
+  path:
+    description: 'Absolute path to chromium/src'
+    value: ${{ steps.run.outputs.path }}
+  version:
+    description: 'Resolved Chromium version'
+    value: ${{ steps.run.outputs.version }}
+  remote-size-gb:
+    description: 'Size on backend for this version (0 in M1)'
+    value: ${{ steps.run.outputs.remote-size-gb }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: python3 "${{ github.action_path }}/src/main.py"
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_BACKEND: ${{ inputs.backend }}
+        INPUT_BACKEND_CONFIG: ${{ inputs.backend-config }}
+        INPUT_FORCE_SAVE: ${{ inputs.force-save }}
+        INPUT_MIN_FREE_GB: ${{ inputs.min-free-gb }}
+        INPUT_EXCLUDE: ${{ inputs.exclude }}
+        INPUT_SHALLOW: ${{ inputs.shallow }}
+        INPUT_PROBE_ONLY: ${{ inputs.probe-only }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
