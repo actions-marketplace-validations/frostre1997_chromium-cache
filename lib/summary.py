@@ -31,7 +31,7 @@ def render_plan(*, mode: str, version: str, backend: str,
     if disk is not None:
         measured = disk.measured if disk.measured != disk.path else "same"
         lines.append(
-            f"- Disk: `{disk.free_gb} / {disk.total_gb} GB` "
+            f"- Disk: `{disk.free_gb:.2f} / {disk.total_gb:.2f} GB` "
             f"free at `{disk.measured}` (measured for `{measured}`)"
         )
     return lines
