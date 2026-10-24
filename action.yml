@@ -16,7 +16,7 @@ inputs:
     description: 'Directory that will contain chromium/src (relative to GITHUB_WORKSPACE)'
     default: ''
   backend:
-    description: 'rclone | ghcr | local'
+    description: 'rclone | ghcr | r2 | local'
     default: 'ghcr'
   backend-config:
     description: 'Backend-specific JSON config'
