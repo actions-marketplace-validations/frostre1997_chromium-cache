@@ -20,7 +20,7 @@ def check(min_free_gb: int, path: str, probe_only: bool) -> DiskInfo | None:
 
     info = measure(path)
     log(
-        f"disk: free={info.free_gb} GB total={info.total_gb} GB "
+        f"disk: free={info.free_gb:.2f} GB total={info.total_gb:.2f} GB "
         f"at {info.measured}"
         + ("" if info.measured == info.path else f" (for {info.path})")
     )
@@ -28,7 +28,7 @@ def check(min_free_gb: int, path: str, probe_only: bool) -> DiskInfo | None:
     if min_free_gb > info.total_gb:
         error(
             f"insufficient disk: min-free-gb={min_free_gb} exceeds total "
-            f"volume size {info.total_gb} GB at {info.measured}"
+            f"volume size {info.total_gb:.2f} GB at {info.measured}"
         )
         error("  hints:")
         error("    - use a larger runner (ubuntu-latest-16-cores has ~180 GB)")
@@ -39,7 +39,7 @@ def check(min_free_gb: int, path: str, probe_only: bool) -> DiskInfo | None:
     if info.free_gb < min_free_gb:
         error(
             f"insufficient disk: need >= {min_free_gb} GB free, "
-            f"have {info.free_gb} GB (total {info.total_gb} GB) "
+            f"have {info.free_gb:.2f} GB (total {info.total_gb:.2f} GB) "
             f"at {info.measured}"
         )
         error("  hints:")
