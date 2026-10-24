@@ -58,7 +58,7 @@ jobs:
         run: |
           # Combine Chromium blog link + GitHub summary + custom text
           cat <<EOF > release_body.md
-          **Note:**
+          ### **Note:**
           This release pulls the actual Chromium source version.
 
           ### Chromium Changelog:
