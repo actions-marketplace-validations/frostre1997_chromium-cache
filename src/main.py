@@ -28,6 +28,9 @@ def _make_backend(name: str) -> Backend:
     if name == "ghcr":
         from backends.ghcr import GhcrBackend
         return GhcrBackend()
+    if name == "r2":
+        from backends.r2 import R2Backend
+        return R2Backend()
     die(f"backend {name!r} not implemented")
 
 
