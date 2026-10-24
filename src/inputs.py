@@ -7,7 +7,7 @@ from lib.log import die
 
 
 VALID_MODES = {"restore", "save", "both"}
-VALID_BACKENDS = {"rclone", "ghcr", "local"}
+VALID_BACKENDS = {"rclone", "ghcr", "r2", "local"}
 
 
 def _str(name: str, default: str = "") -> str:
