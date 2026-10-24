@@ -47,7 +47,7 @@ class RcloneBackend(Backend):
         ctx.workdir.mkdir(parents=True, exist_ok=True)
         _run([
             "rclone", "sync", remote_work, str(ctx.workdir),
-            "--fast-list", "--stats", "30s",
+            "--fast-list", "--stats", "30s", "--create-empty-src-dirs",
             *_excludes(ctx), *_extra_args(ctx.config),
         ])
         return True
@@ -58,7 +58,7 @@ class RcloneBackend(Backend):
         remote_work = f"{_prefix(ctx.config)}/{ctx.version}"
         _run([
             "rclone", "sync", str(ctx.workdir), remote_work,
-            "--fast-list", "--stats", "30s", "--immutable",
+            "--fast-list", "--stats", "30s", "--immutable", "--create-empty-src-dirs",
             *_excludes(ctx), *_extra_args(ctx.config),
         ])
 
