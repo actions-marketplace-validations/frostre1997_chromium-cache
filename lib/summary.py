@@ -16,9 +16,17 @@ def write(lines: list[str]) -> None:
         f.write("\n".join(lines) + "\n")
 
 
-def render_plan(*, mode: str, version: str, backend: str,
-                path: str, probe: bool,
-                disk: DiskInfo | None = None) -> list[str]:
+def render_plan(
+    *,
+    mode: str,
+    version: str,
+    backend: str,
+    path: str,
+    probe: bool,
+    disk: DiskInfo | None = None,
+    cache_hit: bool | None = None,
+    remote_size_gb: float | None = None,
+) -> list[str]:
     lines = [
         "## chromium-cache",
         "",
@@ -34,4 +42,8 @@ def render_plan(*, mode: str, version: str, backend: str,
             f"- Disk: `{disk.free_gb:.2f} / {disk.total_gb:.2f} GB` "
             f"free at `{disk.measured}` (measured for `{measured}`)"
         )
+    if cache_hit is not None:
+        lines.append(f"- Cache hit: `{'yes' if cache_hit else 'no'}`")
+    if remote_size_gb is not None:
+        lines.append(f"- Remote size: `{remote_size_gb:.2f} GB`")
     return lines
